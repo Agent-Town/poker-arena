@@ -145,6 +145,11 @@ Implementation requirement:
 - choose an OpenSpiel hold'em implementation that supports 6+ players and NL betting.
 - the exact OpenSpiel game string + parameters MUST be frozen in the experience bundle and validated by tests (see Milestone M1).
 
+Season 0 implementation note (OpenSpiel wheels):
+- The OpenSpiel 1.5 Python wheels expose NLHE via `universal_poker`, but no-limit betting is limited to a small **betting abstraction** (`fc`, `fcpa`, `fchpa`).
+- Season 0 therefore freezes `bettingAbstraction=fchpa`, giving the canonical action types: `FOLD`, `CALL` (includes check), `HALF_POT`, `BET`, `ALL_IN`.
+- Arbitrary `RAISE` sizing (`raiseTo`) is deferred to a later season that ships a custom OpenSpiel build or a different authoritative engine binding.
+
 ---
 
 ## 5) Agent Interface (Artifacts + Tools)
@@ -205,6 +210,14 @@ Tool: `poker.act`
 Constraints:
 - `raiseTo` must be within `[minRaiseTo, maxRaiseTo]` from the observation.
 - `CALL` implies `CHECK` when `toCall=0` (runner normalizes).
+
+Season 0 tool schema note:
+- When using the frozen `fchpa` abstraction, `poker.act` does **not** support arbitrary `RAISE`. It supports only:
+  - `{ "action": "FOLD" }`
+  - `{ "action": "CALL" }` (includes check)
+  - `{ "action": "HALF_POT" }`
+  - `{ "action": "BET" }` (pot-sized)
+  - `{ "action": "ALL_IN" }`
 
 ### 5.3 Invalid Actions + Timeouts (Penalty Model)
 Defined in `penalty.md`, enforced by runner:
@@ -445,4 +458,3 @@ Pass criteria:
 
 Resolution rule:
 - do not proceed beyond M1 until we have a passing golden determinism test and a locked, documented game configuration.
-

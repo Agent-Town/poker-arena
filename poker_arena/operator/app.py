@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from poker_arena.operator.models import (
     BatchCreateRequest,
@@ -8,13 +11,16 @@ from poker_arena.operator.models import (
     ExperienceUpsertRequest,
     ExperienceUpsertResponse,
     HealthResponse,
+    LeaderboardGetResponse,
     LeaderboardComputeRequest,
     LeaderboardComputeResponse,
+    ReplayVerifyResponse,
     SetupUpsertRequest,
     SetupUpsertResponse,
     TournamentGetResponse,
 )
 from poker_arena.operator.storage import OperatorStorage
+from poker_arena.replay import replay_tournament_from_trace
 from poker_arena.runner.runner import run_tournament
 from poker_arena.leaderboard.leaderboard import compute_leaderboard_snapshot
 
@@ -75,6 +81,37 @@ def create_app(*, data_dir: str | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="TOURNAMENT_NOT_FOUND")
         return TournamentGetResponse(ok=True, tournament=TournamentGetResponse.Tournament(**t))
 
+    @app.get("/v1/tournaments/{tournament_id}/trace")
+    def get_tournament_trace(tournament_id: str) -> FileResponse:
+        t = storage.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="TOURNAMENT_NOT_FOUND")
+        p = t.get("tracePath")
+        if not p:
+            raise HTTPException(status_code=404, detail="TRACE_NOT_AVAILABLE")
+        return FileResponse(path=p, media_type="application/jsonl")
+
+    @app.get("/v1/tournaments/{tournament_id}/summary")
+    def get_tournament_summary(tournament_id: str) -> FileResponse:
+        t = storage.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="TOURNAMENT_NOT_FOUND")
+        p = t.get("summaryPath")
+        if not p:
+            raise HTTPException(status_code=404, detail="SUMMARY_NOT_AVAILABLE")
+        return FileResponse(path=p, media_type="application/json")
+
+    @app.post("/v1/tournaments/{tournament_id}/replay/verify", response_model=ReplayVerifyResponse)
+    def verify_replay(tournament_id: str) -> ReplayVerifyResponse:
+        t = storage.get_tournament(tournament_id)
+        if not t:
+            raise HTTPException(status_code=404, detail="TOURNAMENT_NOT_FOUND")
+        p = t.get("tracePath")
+        if not p:
+            raise HTTPException(status_code=404, detail="TRACE_NOT_AVAILABLE")
+        res = replay_tournament_from_trace(Path(p))
+        return ReplayVerifyResponse(ok=True, tournamentId=tournament_id, hands=res.hands, finishOrder=res.finish_order)
+
     @app.post("/v1/leaderboards/compute", response_model=LeaderboardComputeResponse)
     def compute_leaderboard(req: LeaderboardComputeRequest) -> LeaderboardComputeResponse:
         exp = storage.get_experience(req.experienceId)
@@ -93,5 +130,11 @@ def create_app(*, data_dir: str | None = None) -> FastAPI:
         storage.put_leaderboard_snapshot(snapshot)
         return LeaderboardComputeResponse(ok=True, snapshotId=snapshot.snapshot_id, leaderboard=snapshot.payload)
 
-    return app
+    @app.get("/v1/leaderboards/{snapshot_id}", response_model=LeaderboardGetResponse)
+    def get_leaderboard_snapshot(snapshot_id: str) -> LeaderboardGetResponse:
+        payload = storage.get_leaderboard_snapshot(snapshot_id)
+        if not payload:
+            raise HTTPException(status_code=404, detail="LEADERBOARD_NOT_FOUND")
+        return LeaderboardGetResponse(ok=True, snapshotId=snapshot_id, leaderboard=payload)
 
+    return app

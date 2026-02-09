@@ -73,3 +73,15 @@ class TournamentGetResponse(BaseModel):
     ok: bool
     tournament: Tournament
 
+
+class ReplayVerifyResponse(BaseModel):
+    ok: bool
+    tournamentId: str
+    hands: int
+    finishOrder: list[int]
+
+
+class LeaderboardGetResponse(BaseModel):
+    ok: bool
+    snapshotId: str
+    leaderboard: dict[str, object]

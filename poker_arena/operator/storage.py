@@ -375,6 +375,17 @@ class OperatorStorage:
         finally:
             con.close()
 
+    def get_leaderboard_snapshot(self, snapshot_id: str) -> dict[str, Any] | None:
+        con = sqlite3.connect(self.db_path)
+        try:
+            row = con.execute("SELECT data FROM leaderboards WHERE id=?", (snapshot_id,)).fetchone()
+        finally:
+            con.close()
+        if not row:
+            return None
+        (data,) = row
+        return json.loads(data)
+
     # Helper for runner: where to write run artifacts
     def run_dir(self, tournament_id: str) -> Path:
         d = self.root_dir / "runs" / tournament_id
@@ -410,4 +421,3 @@ class LeaderboardSnapshot:
     snapshot_id: str
     experience_id: str
     payload: dict[str, Any]
-
